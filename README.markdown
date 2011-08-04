@@ -43,14 +43,31 @@ If you are developing with a classic style app, just require the gem and it will
       'Sinatra::Synchrony is loaded automatically in classic mode, nothing needed'
     end
 
+Net::HTTP / TCPSocket
+---
+If you're using anything based on TCPSocket (such as Net::HTTP, which is used by many things), you can replace the native Ruby TCPSocket with one that supports EventMachine and allows for concurrency:
+
+    Sinatra::Synchrony.overload_tcpsocket!
+
+This will allow you to use things like [RestClient](https://github.com/archiloque/rest-client) without any changes:
+
+    RestClient.get 'http://google.com'
+
+This is not perfect though - the TCPSocket overload doesn't currently support SSL and will throw an exception. This is more for when you have ruby libraries that use Net::HTTP and you want to try something. If you intend to do HTTP requests, I strongly recommend using [Faraday](https://github.com/technoweenie/faraday) instead, which has support for [EM-HTTP-Request](https://github.com/igrigorik/em-http-request).
+
+Please encourage Ruby library developers to use (or at least support) Faraday instead of Net::HTTP. Aside from the inability to be concurrent natively, it's a pretty weird and crappy interface, which makes it harder to replace it with something better.
+
 Tests
 ---
+Add this to the top of your test file:
 
-Just write your tests as usual, my Rack::Test patch fixes the "outside of EventMachine" errors. You must be in the __test__ environment so that Sinatra will not load Rack::FiberPool. My patch admittedly needs some work.
+    Sinatra::Synchrony.patch_tests!
+
+Then just write your tests as usual, and all tests will be run within EventMachine. You must be in the __test__ environment so that Sinatra will not load Rack::FiberPool.
 
 Benchmarks
 ---
-It's pretty fast!
+Despite enabling synchronous programming without callbacks, there is no performance hit to your application! All the performance benefits you expect from Thin/Rainbows and EventMachine are still there:
 
     class App < Sinatra::Base
       register Sinatra::Synchrony
@@ -59,7 +76,7 @@ It's pretty fast!
       end
     end
 
-run with rackup -s thin:
+Benchmarked with rackup -s thin:
 
     $ ab -c 50 -n 2000 http://127.0.0.1:9292/
     ...
@@ -76,24 +93,22 @@ run with rackup -s thin:
 
 Let's try a simple blocking IO example to prove it works. 100 hits to google.com:
 
+    require 'sinatra'
+    require 'sinatra/synchrony'
     require 'rest-client'
-    
-    class App < Sinatra::Base
-      register Sinatra::Synchrony
-      get '/' do
-        # Using EventMachine::HttpRequest
-        # EM::Synchrony.sync(EventMachine::HttpRequest.new('http://google.com').get).response
+    require 'faraday'
+    Faraday.default_adapter = :em_synchrony
 
-        # Using RestClient, which gets concurrency via patched TCPSocket, no changes required!
-        RestClient.get 'http://google.com'
-      end 
+    get '/' do
+      Faraday.get 'http://google.com'
     end
+
 
     $ ab -c 100 -n 100 http://127.0.0.1:9292/
     ...
-    Time taken for tests:   1.270 seconds
-    
-For a perspective, this operation takes __33 seconds__ without this extension. That's __26x__ faster!
+    Time taken for tests:   0.256 seconds
+
+For a perspective, this operation takes __33 seconds__ without this extension.
 
 Geoloqi
 ---
@@ -101,9 +116,7 @@ This gem was designed to help us develop faster games and internal applications 
 
 TODO / Thoughts
 ---
-* This is fairly new, though we are using it in production without any problems. Test before deploying anything with it.
-* Provide better method for patching Rack::Test that's less fragile to version changes. This is a big priority and I intend to improve this. Pull requests here welcome!
-* Research way to run tests with Rack::FiberPool enabled.
+* We are using this in production without any problems, and it's very stable for us. But you should test before deploying anything with it.
 * There is work underway to make this a Rack middleware, and integrate that middleware with this plugin. That way, many other frameworks can take advantage of this. There is also work exploratory work to provide support for non-EventMachine Reactor pattern implementations with this approach, but it's beyond the scope of this extension.
 
 Author
@@ -116,4 +129,5 @@ Thanks
 * [Mike Perham](http://www.mikeperham.com) and [Carbon Five](http://carbonfive.com). For rack-fiber_pool, em-resolv-replace, and many blog posts and presentations on this.
 * [Konstantin Haase](http://rkh.im/) for session overload suggestion.
 * [Steeve Morin](http://github.com/steeve)
+* [Ryan Caught](https://github.com/rcaught)
 * The many Sinatra developers that liberated me from framework hell, and EventMachine developers that liberated me from blocking IO hell.

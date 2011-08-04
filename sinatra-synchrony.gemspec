@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'sinatra-synchrony'
-  s.version = '0.1.0.beta.2'
+  s.version = '0.1.1'
   s.authors = ['Kyle Drake']
   s.email = ['kyledrake@gmail.com']
   s.homepage = 'https://github.com/kyledrake/sinatra-synchrony'
@@ -16,7 +16,8 @@ Gem::Specification.new do |s|
   s.add_dependency 'rack-fiber_pool',   '= 0.9.1'
   s.add_dependency 'em-http-request',   '= 0.3.0'
   s.add_dependency 'em-synchrony',      '= 0.3.0.beta.1'
-  s.add_dependency 'em-resolv-replace', '= 1.1.1'
+  s.add_dependency 'em-resolv-replace', '>= 0'
+  s.add_dependency 'async-rack',        '>= 0'
 
   s.add_development_dependency 'rake'
   s.add_development_dependency 'rack-test', '= 0.5.7'
